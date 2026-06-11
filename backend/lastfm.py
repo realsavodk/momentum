@@ -73,6 +73,7 @@ async def get_artist(artist_name: str) -> dict:
     }
 
 
+
 async def get_top_tracks(artist_name: str, limit: int = 10) -> list[dict]:
     data = await _get("artist.gettoptracks", {"artist": artist_name, "limit": limit})
     tracks = data.get("toptracks", {}).get("track", [])

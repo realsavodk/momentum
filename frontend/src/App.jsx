@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { api } from "./api";
 import ArtistHeader from "./components/ArtistHeader";
 import MetricsRow from "./components/MetricsRow";
@@ -33,15 +33,24 @@ export default function App() {
   }, [query]);
 
   async function selectArtist(id) {
-    setSelected(id);
     setResults([]);
     setError("");
     setLoading(true);
     try {
+      // getArtist seeds history on first visit — must complete before momentum/predictions
       const { artist, top_tracks } = await api.getArtist(id);
       setArtist(artist);
       setTopTracks(top_tracks);
-      setHistory(await api.getHistory(id));
+
+      const [history, { scores }, predData] = await Promise.all([
+        api.getHistory(id),
+        api.getMomentum(id, decay),
+        api.getPredictions(id, decay).catch(() => ({ next_hit: null })),
+      ]);
+      setHistory(history);
+      setMomentum(scores);
+      setPredictions(predData.next_hit);
+      setSelected(id);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -49,26 +58,18 @@ export default function App() {
     }
   }
 
-  const loadMomentum = useCallback(async () => {
+  async function handleDecayChange(newDecay) {
+    setDecay(newDecay);
     if (!selected) return;
     try {
-      const { scores } = await api.getMomentum(selected, decay);
+      const [{ scores }, predData] = await Promise.all([
+        api.getMomentum(selected, newDecay),
+        api.getPredictions(selected, newDecay).catch(() => ({ next_hit: null })),
+      ]);
       setMomentum(scores);
-    } catch (e) {
-      setError(e.message);
-    }
-  }, [selected, decay]);
-
-  const loadPredictions = useCallback(async () => {
-    if (!selected) return;
-    try {
-      const { next_hit } = await api.getPredictions(selected, decay);
-      setPredictions(next_hit);
+      setPredictions(predData.next_hit);
     } catch { /* best-effort */ }
-  }, [selected, decay]);
-
-  useEffect(() => { loadMomentum(); }, [loadMomentum]);
-  useEffect(() => { loadPredictions(); }, [loadPredictions]);
+  }
 
 
   return (
@@ -136,7 +137,7 @@ export default function App() {
             <PredictionScores
               scores={momentum}
               decay={decay}
-              onDecayChange={setDecay}
+              onDecayChange={handleDecayChange}
               predictions={predictions}
             />
           </div>

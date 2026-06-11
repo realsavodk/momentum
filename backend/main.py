@@ -59,14 +59,22 @@ async def search(q: str = Query(..., min_length=1)):
 
 @app.get("/artist/{artist_id}")
 async def artist(artist_id: str):
-    """Artist profile + current top tracks. Saves a snapshot on each view."""
+    """Artist profile + current top tracks. Saves a snapshot on each view.
+    On first visit, seeds 6 months of synthetic history so charts and ML
+    are immediately useful. The seed is fast (pure SQLite writes) so it
+    runs synchronously before the response.
+    """
     try:
         profile = await lastfm.get_artist(artist_id)
         tracks = await lastfm.get_top_tracks(artist_id)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Last.fm error: {e}")
 
+    is_new = not database.has_history(artist_id)
     database.save_snapshot(artist_id, tracks)
+    if is_new:
+        database.seed_demo_snapshots(artist_id, tracks)
+
     return {"artist": profile, "top_tracks": tracks}
 
 

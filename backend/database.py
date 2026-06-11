@@ -60,6 +60,15 @@ def save_snapshot(artist_id: str, tracks: list[dict]) -> int:
     return len(tracks)
 
 
+def has_history(artist_id: str) -> bool:
+    """Return True if the artist already has any snapshots."""
+    with _conn() as conn:
+        count = conn.execute(
+            "SELECT COUNT(*) FROM snapshots WHERE artist_id = ?", (artist_id,)
+        ).fetchone()[0]
+    return count > 0
+
+
 def get_tracked_artists() -> list[str]:
     """All distinct artist IDs that have at least one snapshot."""
     with _conn() as conn:
@@ -94,7 +103,7 @@ def seed_demo_snapshots(artist_id: str, tracks: list[dict], months: int = 6) -> 
             base_count = int(t["popularity"] * 60000) + random.randint(10000, 200000)
             monthly_growth = int(base_count * 0.04) + random.randint(5000, 30000)
             for m in range(months):
-                captured = (base - timedelta(days=30 * (months - 1 - m))).isoformat()
+                captured = (base - timedelta(days=30 * (months - m))).isoformat()
                 trend = (i - len(tracks) / 2) * (m - months / 2) * 2
                 pop = max(5, min(100, int(t["popularity"] + trend + random.randint(-4, 4))))
                 play = base_count + monthly_growth * m + random.randint(-8000, 8000)
